@@ -209,9 +209,11 @@ export const ISSUE_ORIGIN_KINDS = [
   "issue_productivity_review",
   "stranded_issue_recovery",
 ] as const;
+export const EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND = "external:irie-development-brief" as const;
 export type BuiltInIssueOriginKind = (typeof ISSUE_ORIGIN_KINDS)[number];
 export type PluginIssueOriginKind = `plugin:${string}`;
-export type IssueOriginKind = BuiltInIssueOriginKind | PluginIssueOriginKind;
+export type ExternalIssueOriginKind = typeof EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND;
+export type IssueOriginKind = BuiltInIssueOriginKind | PluginIssueOriginKind | ExternalIssueOriginKind;
 export const ISSUE_SURFACE_VISIBILITIES = ["default", "plugin_operation"] as const;
 export type IssueSurfaceVisibility = (typeof ISSUE_SURFACE_VISIBILITIES)[number];
 

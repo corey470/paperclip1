@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ISSUE_REQUEST_DEPTH } from "../index.js";
+import { EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND, MAX_ISSUE_REQUEST_DEPTH } from "../index.js";
 import {
   addIssueCommentSchema,
   createIssueSchema,
@@ -38,6 +38,43 @@ describe("issue validators", () => {
     });
 
     expect(parsed.description).toBe("PR: https://example.com/pr/1\n\nShip the follow-up.");
+  });
+
+  it("accepts Development Brief Engine origin metadata on issue creation", () => {
+    const parsed = createIssueSchema.parse({
+      title: "Create launch assets",
+      originKind: EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND,
+      originId: "devbrief_family-tide-takeover",
+      originFingerprint: "brief:v1:family-tide-takeover",
+    });
+
+    expect(parsed.originKind).toBe(EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND);
+    expect(parsed.originId).toBe("devbrief_family-tide-takeover");
+    expect(parsed.originFingerprint).toBe("brief:v1:family-tide-takeover");
+  });
+
+  it("rejects unsupported issue origin metadata on issue creation", () => {
+    expect(
+      createIssueSchema.safeParse({
+        title: "Create launch assets",
+        originKind: "routine_execution",
+        originId: "devbrief_family-tide-takeover",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      createIssueSchema.safeParse({
+        title: "Create launch assets",
+        originId: "devbrief_family-tide-takeover",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      createIssueSchema.safeParse({
+        title: "Create launch assets",
+        originKind: EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND,
+      }).success,
+    ).toBe(false);
   });
 
   it("normalizes escaped line breaks in issue update comments", () => {

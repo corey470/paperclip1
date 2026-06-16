@@ -246,6 +246,8 @@ Invariants:
 - `in_progress` requires assignee
 - terminal states: `done | cancelled`
 
+External source-truth pointers may use origin fields when Paperclip is filing work for another system. The first supported external origin is `external:irie-development-brief`, with `origin_id` set to the Development Brief ID. Paperclip stores the pointer for routing and proof; the Development Brief Engine remains the owner of brief schema, storage, versioning, validation, markdown, JSON, and adapter exports.
+
 ## 7.7 `issue_comments`
 
 - `id` uuid pk

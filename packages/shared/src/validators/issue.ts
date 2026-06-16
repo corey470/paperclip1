@@ -24,6 +24,7 @@ import {
   ISSUE_THREAD_INTERACTION_CONTINUATION_POLICIES,
   ISSUE_THREAD_INTERACTION_KINDS,
   ISSUE_THREAD_INTERACTION_STATUSES,
+  EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND,
   MODEL_PROFILE_KEYS,
 } from "../constants.js";
 import { multilineTextSchema } from "./text.js";
@@ -368,6 +369,26 @@ function withCreateIssueStatusDefault<T extends z.ZodRawShape>(schema: z.ZodObje
   }, schema);
 }
 
+function validateCreateIssueExternalOrigin(
+  input: { originKind?: string; originId?: string | null; originFingerprint?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (input.originKind && !input.originId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["originId"],
+      message: "originId is required when originKind is external:irie-development-brief",
+    });
+  }
+  if (!input.originKind && (input.originId || input.originFingerprint)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["originKind"],
+      message: "originKind is required when origin metadata is provided",
+    });
+  }
+}
+
 const createIssueBaseSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   projectWorkspaceId: z.string().uuid().optional().nullable(),
@@ -384,6 +405,9 @@ const createIssueBaseSchema = z.object({
   assigneeUserId: z.string().optional().nullable(),
   requestDepth: issueRequestDepthInputSchema.optional().default(0),
   billingCode: z.string().optional().nullable(),
+  originKind: z.literal(EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND).optional(),
+  originId: z.string().trim().min(1).max(255).optional().nullable(),
+  originFingerprint: z.string().trim().min(1).max(255).optional().nullable(),
   assigneeAdapterOverrides: issueAssigneeAdapterOverridesSchema.optional().nullable(),
   executionPolicy: issueExecutionPolicySchema.optional().nullable(),
   executionWorkspaceId: z.string().uuid().optional().nullable(),
@@ -396,7 +420,8 @@ export const createIssueInputSchema = createIssueBaseSchema.extend({
   status: createIssueBaseSchema.shape.status.optional(),
 });
 
-export const createIssueSchema = withCreateIssueStatusDefault(createIssueBaseSchema);
+export const createIssueSchema = withCreateIssueStatusDefault(createIssueBaseSchema)
+  .superRefine(validateCreateIssueExternalOrigin);
 
 export type CreateIssue = z.infer<typeof createIssueSchema>;
 

@@ -22,6 +22,7 @@ import {
   createIssueThreadInteractionSchema,
   createIssueWorkProductSchema,
   createIssueLabelSchema,
+  EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND,
   createAcceptedPlanDecompositionSchema,
   checkoutIssueSchema,
   createDocumentAnnotationCommentSchema,
@@ -3553,6 +3554,9 @@ export function issueRoutes(
         title: issue.title,
         identifier: issue.identifier,
         ...buildCreateIssueActivityStatusDetails(issue, res),
+        ...(issue.originKind === EXTERNAL_DEVELOPMENT_BRIEF_ISSUE_ORIGIN_KIND
+          ? { originKind: issue.originKind, originId: issue.originId, originFingerprint: issue.originFingerprint }
+          : {}),
         ...(Array.isArray(req.body.blockedByIssueIds) ? { blockedByIssueIds: req.body.blockedByIssueIds } : {}),
         ...summarizeIssueReferenceActivityDetails({
           addedReferencedIssues: referenceDiff.addedReferencedIssues.map(summarizeIssueRelationForActivity),
