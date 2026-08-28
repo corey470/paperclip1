@@ -33,6 +33,8 @@ Open-source orchestration for teams of AI agents.
 
 Paperclip is a Node.js server and React UI that orchestrates a team of AI agents to run a business. Bring your own agents, assign goals, and track work and costs from one dashboard.
 
+> **Irie deployment:** Production runs on Hostinger from security commit `609cc3ee`, which belongs to a deployed-source branch separate from current `master`. Read the [Irie production pointer](doc/IRIE_PRODUCTION_POINTER_2026-08-28.md) before changing or redeploying that runtime.
+
 It looks like a task manager. Under the hood: org charts, budgets, governance, goal alignment, and agent coordination.
 
 **Manage business goals, not pull requests.**
