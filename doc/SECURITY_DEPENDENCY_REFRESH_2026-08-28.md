@@ -1,16 +1,18 @@
 # Paperclip dependency security refresh
 
-Status: review branch only. Nothing in this branch has been deployed to DigitalOcean or Hostinger.
+Status: the approved security image is live on Hostinger production and staging. DigitalOcean is stopped for rollback.
 
 ## Source boundary
 
 - GitHub repo: `corey470/paperclip1`.
 - Branch: `codex/paperclip-security-20260828`.
-- Base commit: `478b72e6a314c6f9f1598fe9078ae180ddb7e5c0`, the completed Hostinger migration-documentation commit.
+- Base commit: `478b72e6a314c6f9f1598fe9078ae180ddb7e5c0`, the pre-cutover Hostinger migration-documentation commit.
 - Deployed-source capture: `621dadf4`, including the recovered OpenClaw wake-payload change and bridge script.
-- DigitalOcean and Hostinger runtime state was not changed during this work.
+- Live security commit: `609cc3ee3a8474d2ca2fa97d42987fd1eb013ed9`.
 
-This branch deliberately starts from the deployed-source migration branch, not from GitHub `master`. It does not alter the migration snapshot, schema files, application data, secrets, schedulers, tunnel, DNS, or OpenClaw gateway.
+This branch starts from the deployed-source migration branch, not from GitHub `master`. GitHub `master` was `524e18b060e4d15bd5e5a67799f3ee8c5f837919` during the post-cutover documentation pass and has 260 commits outside this branch's history. Do not merge those histories to recreate production.
+
+The application changes do not alter migrations, schema files, application data, or deployment topology. Hostinger supplies `PAPERCLIP_ALLOWED_HOSTNAMES` and `BETTER_AUTH_TRUSTED_ORIGINS` from root-owned env files so the private tailnet origin can pass host and Better Auth checks. Those values are runtime configuration and do not belong in Git.
 
 ## Audit result
 
@@ -49,7 +51,7 @@ The root lock policy pins patched releases for `@hono/node-server`, `fast-uri`, 
 
 No force install or dependency major-version jump was used.
 
-This deploy-review branch includes the resolved lockfile so a staged image can be reproduced exactly. The repo's pull-request policy normally leaves `pnpm-lock.yaml` to GitHub Actions. If this work becomes a pull request, follow that policy and let CI regenerate the lockfile from the reviewed manifests.
+This security branch includes the resolved lockfile so the live image can be reproduced from commit `609cc3ee`. The repo's pull-request policy leaves `pnpm-lock.yaml` to GitHub Actions. If this work becomes a pull request, follow that policy and let CI regenerate the lockfile from the reviewed manifests.
 
 ## Compatibility changes
 
@@ -68,6 +70,16 @@ This deploy-review branch includes the resolved lockfile so a staged image can b
 - API: disposable runtime root and health returned 200. Authenticated mode returned the expected 403/401 results before sign-in.
 - Browser: the application rendered the Paperclip onboarding UI from the disposable loopback runtime.
 
+Hostinger deployment checks also passed:
+
+- Both lanes run image `609cc3ee` with healthy app and database containers.
+- Both heartbeat schedulers are enabled after the final sync.
+- Production listens on `127.0.0.1:3100` behind `paperclip-production-tailnet.socket` at `100.123.61.117:3100`; staging listens on `127.0.0.1:13100`.
+- Ten route and authentication rounds passed. Anonymous `/api/auth/get-session` returned `401`. The removed `/api/auth/session` shorthand returned `404` and should not be used as a health probe.
+- Final DigitalOcean snapshot: `/opt/irie/backups/paperclip-pair/cutover-20260828T212720Z`.
+- Hostinger production backup: `/opt/irie/backups/paperclip-production/20260828T213536Z`; restore drill passed.
+- Hostinger staging backup: `/opt/irie/backups/paperclip-staging/20260828T213543Z`; restore drill passed.
+
 The disposable runtimes and databases were stopped and moved to Trash after verification. No persistent local service was left listening.
 
 ## Remaining findings and review notes
@@ -78,15 +90,18 @@ The remaining production findings are 12 moderate and 7 low. They are primarily 
 
 The six existing test failures must not be attributed to this refresh. They are preserved behavior from the exact deployed source and should be repaired separately with the OpenClaw bridge work and a hermetic Tailscale mock.
 
-## Cutover use
+## Production and rollback
 
-This branch is a candidate application source, not an automatic replacement for the already staged images. Before using it at cutover:
+The cutover used this branch for both Hostinger images. DigitalOcean's four Paperclip containers now have restart policy `no` and remain exited. DigitalOcean retains its app trees, volumes, secrets, and final snapshot as rollback material.
 
-1. Review this branch against `478b72e6`.
-2. Rebuild both Hostinger Paperclip images from the approved security commit while schedulers remain disabled.
-3. Repeat Hostinger production/staging health, anonymous auth, browser, and database migration checks.
-4. Keep the serialized dependency order: freeze DigitalOcean Paperclip writers, final-sync and stop the DigitalOcean OpenClaw gateway, start and verify the Hostinger gateway, restore the final Paperclip snapshot, then enable Hostinger Paperclip schedulers.
+The first production recreation occurred while `paperclip-production-tailnet.socket` held port `3100`. Paperclip selected `3101`. The operator disabled the socket, restarted Paperclip on loopback port `3100`, confirmed health, and enabled the socket again. Disable the socket before future production container recreations, then re-enable it after the loopback health check passes.
 
-If the branch is not approved, keep the existing staged images at migration commit `478b72e6`. Do not mix the lockfile from this branch with that older image.
+DigitalOcean data became stale after Hostinger accepted writes. A rollback must stop Hostinger writers, take fresh Hostinger backups, and reverse-sync both databases and owned data volumes before starting any DigitalOcean database. Follow the paired Paperclip and OpenClaw rollback order in `doc/HOSTINGER_MIGRATION_2026-08-28.md` and the Irie sidecar runbook.
 
-Rollback for this branch is source-only: redeploy the known staged image built from `478b72e6`. Database rollback still requires the migration runbook's reverse-sync rule once Hostinger has accepted writes.
+## Untouched local work
+
+- `/Users/irieagent/Documents/paper-clip-Irie-commerce/paperclip`: modified `README.md`; modified `packages/adapters/openclaw-gateway/src/server/execute.ts`; untracked `.codegraph/`; untracked `scripts/paperclip-bridge.ts`.
+- `/Users/irieagent/Documents/paper-clip-Irie-commerce/paperclip-irie-config`: modified `.codegraph/.gitignore`.
+- `/Users/irieagent/Documents/paperclip`: untracked `.codegraph/` and `.mcp.json`.
+
+The migration and security work used isolated worktrees. It did not edit the paths above.
