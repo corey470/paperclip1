@@ -1,47 +1,66 @@
 # Paperclip Hostinger migration
 
-Status: staged on Hostinger, ready for final sync after the shared OpenClaw gateway moves.
+Status: production runs on Hostinger. DigitalOcean is stopped and retained for rollback.
 
 ## Source truth
 
 - GitHub application repo: `corey470/paperclip1`, default branch `master`.
-- GitHub `master` at verification: `524e18b060e4d15bd5e5a67799f3ee8c5f837919`.
-- DigitalOcean source: `/opt/irie/apps/paperclip/src` and `/opt/irie/staging/paperclip/src`.
-- Both DigitalOcean source trees match each other. They contain 1,652 hashed files and have source-manifest SHA-256 `8fa51be44cc64931715b2bc1b5caf6f7f10a94db87c139b62ff0cc7520c57e52`.
-- The deployed source matched the older local runtime checkout at `/Users/irieagent/Documents/paper-clip-Irie-commerce/paperclip`, including its working-tree changes.
+- GitHub `master` at the post-cutover documentation pass: `524e18b060e4d15bd5e5a67799f3ee8c5f837919`.
+- Live Hostinger image source: security branch `codex/paperclip-security-20260828`, commit `609cc3ee3a8474d2ca2fa97d42987fd1eb013ed9`.
+- Deployed-source capture: `621dadf4`. It records the DigitalOcean application tree, including the recovered OpenClaw wake-payload change and `scripts/paperclip-bridge.ts`.
 - Migration branch: `codex/paperclip-hostinger-20260828`.
-- Commit `621dadf4` captures the exact deployed application changes before this documentation commit.
 
-## Staged destinations
+GitHub `master` has 260 commits that do not belong to the deployed-source branch. The migration did not merge those histories. Review and port application changes before replacing the live image.
+
+## Production destinations
 
 | Lane | App | Database | Data volume |
 | --- | --- | --- | --- |
 | Production | Hostinger `/opt/irie/apps/paperclip`, `127.0.0.1:3100` | `paperclip-production-db-1`, `127.0.0.1:54337` | `paperclip-production_paperclip-data` |
 | Staging | Hostinger `/opt/irie/staging/paperclip`, `127.0.0.1:13100` | `paperclip-staging-db-1`, `127.0.0.1:54338` | `paperclip-staging_paperclip-data` |
 
-Both Hostinger servers run with `HEARTBEAT_SCHEDULER_ENABLED=false`. This prevents the staged copies from invoking agents or changing issue state while DigitalOcean remains live.
+Both Hostinger servers run image `609cc3ee`. Both heartbeat schedulers are enabled. Production uses `paperclip-production-tailnet.socket` at `100.123.61.117:3100`; staging stays loopback-only.
+
+The Hostinger env files contain two host-specific settings required by the private listener:
+
+- `PAPERCLIP_ALLOWED_HOSTNAMES` permits `100.123.61.117`.
+- `BETTER_AUTH_TRUSTED_ORIGINS` trusts the Hostinger tailnet origin.
+
+The env files remain under `/opt/irie/secrets`, owned by root with mode `600`. Do not commit their values.
 
 ## DigitalOcean posture
 
-DigitalOcean remains the live source of writes. The production and staging app/database containers remain up. No Cloudflare hostname points to either runtime. Production is private on the DigitalOcean tailnet at `100.108.181.40:3100`; staging is loopback-only at `127.0.0.1:13100`.
+DigitalOcean no longer serves Paperclip. These containers have restart policy `no` and are exited:
 
-The final cutover must freeze the two Paperclip server containers before the shared OpenClaw gateway stops. Start the Hostinger gateway before enabling either Hostinger Paperclip scheduler.
+- `paperclip-production-server-1`
+- `paperclip-production-db-1`
+- `paperclip-staging-server-1`
+- `paperclip-staging-db-1`
 
-## Validation
+DigitalOcean retains its app trees, volumes, secrets, and the frozen cutover snapshot at `/opt/irie/backups/paperclip-pair/cutover-20260828T212720Z`. That database state became stale after Hostinger accepted writes. Never start the old database containers without reverse-syncing the Hostinger databases and owned data.
 
-- `pnpm -r typecheck`: passed.
-- `pnpm build`: passed.
-- Docker image build: passed for both Hostinger lanes.
-- `pnpm test:run`: 1,562 passed, 1 skipped, 6 failed. Four failures cover the recovered uncommitted OpenClaw wake-payload change. Two tests saw the Mac's real Tailscale address instead of their mocked loopback fallback.
-- Browser: production and staging on both hosts rendered the same Paperclip sign-in controls through SSH tunnels.
-- API/auth: ten rounds on each host and lane returned `200` for health and root, `403` for anonymous companies, and `401` for anonymous session lookup.
-- Database: both Hostinger databases matched their DigitalOcean snapshot schema, row counts, and core fingerprints.
-- Owned files: production matched 177 files and staging matched 173 files. Each server appended to its own `server.log` after boot; no other file changed.
-- Hostinger backup and scratch restore drills passed for both lanes.
+## Validation evidence
 
-## Dependency audit
+- Security image: `609cc3ee3a8474d2ca2fa97d42987fd1eb013ed9` remained live after cutover.
+- Dependency gates: production and full-workspace audits report zero critical and zero high findings.
+- Build and migration checks passed before deployment.
+- Final frozen DigitalOcean snapshot: `/opt/irie/backups/paperclip-pair/cutover-20260828T212720Z`.
+- Hostinger production backup: `/opt/irie/backups/paperclip-production/20260828T213536Z`; scratch restore passed.
+- Hostinger staging backup: `/opt/irie/backups/paperclip-staging/20260828T213543Z`; scratch restore passed.
+- Ten route and authentication rounds passed after cutover. Anonymous `/api/auth/get-session` returned `401`; the older `/api/auth/session` shorthand returns `404` on this version.
+- Production tailnet access passed at `100.123.61.117:3100`.
 
-The deployed lockfile reports 2 critical and 48 high production findings. Better Auth, Drizzle, Hono, and several transitive packages need patched versions. The required Better Auth and ORM upgrades cross direct runtime boundaries, and GitHub `master` still pins Better Auth `1.4.18`. This migration does not mix those upgrades into the infrastructure cutover. Keep the runtime private and schedule a separate dependency upgrade with authenticated browser regression tests.
+The first production recreation ran while the tailnet socket already held port `3100`. Paperclip selected `3101` without data loss. The operator disabled the socket, restarted Paperclip on loopback port `3100`, confirmed health, and enabled the socket again. Future recreations must disable `paperclip-production-tailnet.socket` before replacing the production app container, then re-enable it after the app reports healthy on `127.0.0.1:3100`.
+
+## Dependency posture
+
+The live security image reduced the production audit from 2 critical and 48 high findings to zero critical and zero high. It retains 12 moderate and 7 low findings. The security change and review evidence live in `doc/SECURITY_DEPENDENCY_REFRESH_2026-08-28.md` on `codex/paperclip-security-20260828`.
+
+## Rollback
+
+Stop Hostinger writers first. Disable both heartbeat schedulers, stop both Hostinger Paperclip servers, and disable `paperclip-production-tailnet.socket`. Follow the OpenClaw rollback packet before moving agent execution.
+
+Take fresh Hostinger backups and reverse-sync both databases and both owned data volumes to DigitalOcean. Start DigitalOcean in this order: databases, OpenClaw, Paperclip servers. Restore restart policies after database reconciliation, local health, authentication, and `100.108.181.40:3100` pass.
 
 ## Untouched local work
 
@@ -51,10 +70,4 @@ The migration used isolated worktrees. These original paths remain untouched:
 - `/Users/irieagent/Documents/paper-clip-Irie-commerce/paperclip-irie-config`: modified `.codegraph/.gitignore`.
 - `/Users/irieagent/Documents/paperclip`: untracked `.codegraph/` and `.mcp.json` on `codex/irie-openclaw-result-only`.
 
-The isolated migration branch commits the deployed application changes so the next operator can review them without altering the original worktrees.
-
-## Cutover blocker
-
-All active OpenClaw adapter configurations use `ws://127.0.0.1:18789/`. DigitalOcean runs `irie-openclaw-gateway.service` on that port. Hostinger does not have that gateway yet. Paperclip cannot execute agents from Hostinger until the gateway migration restores the same local endpoint and validates its state.
-
-The Irie deployment files and full cutover runbook live in `corey470/paperclip-irie-config` on branch `codex/paperclip-hostinger-20260828`.
+The Irie deployment files and rollback commands live in `corey470/paperclip-irie-config` on branch `codex/paperclip-hostinger-20260828`.
