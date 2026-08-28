@@ -41,7 +41,9 @@ The final cutover must freeze the two Paperclip server containers before the sha
 
 ## Dependency audit
 
-The deployed lockfile reports 2 critical and 48 high production findings. Better Auth, Drizzle, Hono, and several transitive packages need patched versions. The required Better Auth and ORM upgrades cross direct runtime boundaries, and GitHub `master` still pins Better Auth `1.4.18`. This migration does not mix those upgrades into the infrastructure cutover. Keep the runtime private and schedule a separate dependency upgrade with authenticated browser regression tests.
+The deployed lockfile reports 2 critical and 48 high production findings. A separate review branch, `codex/paperclip-security-20260828`, reduces both the production and full workspace audits to zero critical and zero high findings. Its typecheck, build, database migration, fresh authenticated runtime, sign-up, session, API, and browser checks pass. The full suite retains the same six deployed-source failures recorded above.
+
+That security branch is not deployed. Review `doc/SECURITY_DEPENDENCY_REFRESH_2026-08-28.md` and rebuild both Hostinger images with schedulers disabled before choosing it for cutover. Otherwise, keep the already staged image from this migration branch. Do not combine one branch's lockfile with the other branch's image.
 
 ## Untouched local work
 
