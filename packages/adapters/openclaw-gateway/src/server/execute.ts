@@ -15,6 +15,7 @@ import crypto, { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 
 type SessionKeyStrategy = "fixed" | "issue" | "run";
+type PaperclipAccessMode = "api-key" | "result-only";
 
 type WakePayload = {
   runId: string;
@@ -336,6 +337,20 @@ function resolveClaimedApiKeyPath(value: unknown): string {
   return nonEmpty(value) ?? DEFAULT_CLAIMED_API_KEY_PATH;
 }
 
+function normalizePaperclipAccessMode(value: unknown): PaperclipAccessMode {
+  const normalized = nonEmpty(value)?.toLowerCase();
+  if (
+    normalized === "result-only" ||
+    normalized === "result_only" ||
+    normalized === "adapter-result" ||
+    normalized === "adapter_result" ||
+    normalized === "none"
+  ) {
+    return "result-only";
+  }
+  return "api-key";
+}
+
 function buildPaperclipEnvForWake(ctx: AdapterExecutionContext, wakePayload: WakePayload): Record<string, string> {
   const paperclipApiUrlOverride = resolvePaperclipApiUrlOverride(ctx.config.paperclipApiUrl);
   const paperclipEnv: Record<string, string> = {
@@ -363,6 +378,7 @@ function buildWakeText(
   paperclipEnv: Record<string, string>,
   structuredWakePrompt: string,
   claimedApiKeyPath: string,
+  accessMode: PaperclipAccessMode,
 ): string {
   const orderedKeys = [
     "PAPERCLIP_RUN_ID",
@@ -386,6 +402,48 @@ function buildWakeText(
 
   const issueIdHint = payload.taskId ?? payload.issueId ?? "";
   const apiBaseHint = paperclipEnv.PAPERCLIP_API_URL ?? "<set PAPERCLIP_API_URL>";
+
+  if (accessMode === "result-only") {
+    const lines = [
+      "Paperclip wake event for an OpenClaw Gateway adapter.",
+      "",
+      "Run this procedure now. Paperclip is the control plane and OpenClaw is the runtime.",
+      "",
+      "Set these values in your run context:",
+      ...envLines,
+      "",
+      `task_id=${payload.taskId ?? ""}`,
+      `issue_id=${payload.issueId ?? ""}`,
+      `wake_reason=${payload.wakeReason ?? ""}`,
+      `wake_comment_id=${payload.wakeCommentId ?? ""}`,
+      `approval_id=${payload.approvalId ?? ""}`,
+      `approval_status=${payload.approvalStatus ?? ""}`,
+      `linked_issue_ids=${payload.issueIds.join(",")}`,
+      "",
+      "Runtime rules:",
+      "- Do not read a Paperclip claimed API key file.",
+      "- Do not call Paperclip HTTP API endpoints unless a scoped credential is explicitly provided in this run.",
+      "- Do not create or modify Paperclip issues, comments, agents, approvals, or company settings directly.",
+      "- Complete the requested work inside the OpenClaw workspace and return a final result for Paperclip to record.",
+      "",
+      "Return contract:",
+      "- Summary of work performed or reason no work was available.",
+      "- Evidence gathered, including file paths, commands, URLs, timestamps, or screenshots when available.",
+      "- Proposed Paperclip mutations, if any: issue id/title, status, comment body, owner lane, severity, and next action.",
+      "- Escalations needed for billing, subscriptions, refunds, payouts, Stripe configuration, live money routing, or unclear blast radius.",
+      "",
+      `Issue hint: ${issueIdHint || "none"}.`,
+      ...(structuredWakePrompt
+        ? [
+            "",
+            structuredWakePrompt,
+          ]
+        : []),
+      "",
+      "Complete the workflow in this run.",
+    ];
+    return lines.join("\n");
+  }
 
   const lines = [
     "Paperclip wake event for a cloud adapter.",
@@ -1104,6 +1162,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const structuredWakePrompt = renderPaperclipWakePrompt(ctx.context.paperclipWake);
   const structuredWakeJson = stringifyPaperclipWakePayload(ctx.context.paperclipWake);
   const claimedApiKeyPath = resolveClaimedApiKeyPath(ctx.config.claimedApiKeyPath);
+  const paperclipAccessMode = normalizePaperclipAccessMode(ctx.config.paperclipAccessMode);
   const wakeText = buildWakeText(
     wakePayload,
     paperclipEnv,
@@ -1111,6 +1170,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       ? joinWakePayloadSections(structuredWakePrompt, structuredWakeJson)
       : structuredWakePrompt,
     claimedApiKeyPath,
+    paperclipAccessMode,
   );
 
   const sessionKeyStrategy = normalizeSessionKeyStrategy(ctx.config.sessionKeyStrategy);

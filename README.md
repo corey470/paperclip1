@@ -23,6 +23,19 @@
 
 <br/>
 
+> **Irie local checkout note (2026-05-08):** this Mac's local Paperclip checkout
+> is carrying a short-lived OpenClaw Gateway adapter patch for Irie:
+> `paperclipAccessMode: "result-only"`. That mode lets Paperclip use OpenClaw as
+> the runtime without handing every agent a Paperclip bearer key or per-agent
+> OpenAI API key. Treat this as local Irie integration state, not upstream
+> Paperclip truth. The canonical Irie configuration and verification notes live
+> in
+> `/Users/irieagent/Documents/paper-clip-Irie-commerce/paperclip-irie-config/README.md`
+> and
+> `/Users/irieagent/Documents/paper-clip-Irie-commerce/paperclip-irie-config/docs/PAPERCLIP-OPENCLAW-RECONFIGURATION.md`.
+
+<br/>
+
 ## What is Paperclip?
 
 # Open-source orchestration for zero-human companies
